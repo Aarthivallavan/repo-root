@@ -16,21 +16,15 @@ phases:
       - env | sort
       - echo "=============================="
       - echo "Checking required variables..."
-      - |
-        REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
-        ALL_PRESENT=true
-        for VAR in "${REQUIRED_VARS[@]}"; do
-          if [ -z "${!VAR}" ]; then
-            echo "ERROR Missing env var $VAR"
-            ALL_PRESENT=false
-          else
-            echo "OK $VAR is ${!VAR}"
-          fi
-        done
-        if [ "$ALL_PRESENT" = false ]; then
-          exit 1
-        fi
-        echo "All required variables are present"
+      - test -n "$JOB_ID" || (echo "ERROR Missing JOB_ID" && exit 1)
+      - echo "OK JOB_ID is $JOB_ID"
+      - test -n "$PROMPT" || (echo "ERROR Missing PROMPT" && exit 1)
+      - echo "OK PROMPT is $PROMPT"
+      - test -n "$CHANNEL_ID" || (echo "ERROR Missing CHANNEL_ID" && exit 1)
+      - echo "OK CHANNEL_ID is $CHANNEL_ID"
+      - test -n "$USER_ID" || (echo "ERROR Missing USER_ID" && exit 1)
+      - echo "OK USER_ID is $USER_ID"
+      - echo "All required variables are present"
       - echo "=============================="
       
   build:
