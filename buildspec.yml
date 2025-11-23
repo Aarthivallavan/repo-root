@@ -90,7 +90,8 @@ phases:
       
       - echo "Waiting for worker to complete..."
       - |
-        for i in {1..20}; do
+        i=1
+        while [ $i -le 20 ]; do
           WORKER_STATUS=$(aws ecs describe-tasks \
             --cluster $ECS_CLUSTER \
             --tasks $WORKER_TASK_ARN \
@@ -104,11 +105,12 @@ phases:
             break
           fi
           
-          if [ "$i" -eq 20 ]; then
+          if [ $i -eq 20 ]; then
             echo "WARNING Worker still running after 5 minutes"
           fi
           
           sleep 15
+          i=$((i + 1))
         done
       
   post_build:
@@ -126,14 +128,14 @@ phases:
       - echo "Invoking Lambda Responder..."
       - |
         if [ "$SUCCESS" = true ]; then
-          PAYLOAD='{"job_id": "'$JOB_ID'", "status": "completed", "s3_key": "diagrams/'$JOB_ID'.png"}'
+          echo '{"job_id": "'$JOB_ID'", "status": "completed", "s3_key": "diagrams/'$JOB_ID'.png"}' > payload.json
         else
-          PAYLOAD='{"job_id": "'$JOB_ID'", "status": "failed", "error": "Diagram file not found in S3"}'
+          echo '{"job_id": "'$JOB_ID'", "status": "failed", "error": "Diagram file not found in S3"}' > payload.json
         fi
         
         aws lambda invoke \
           --function-name $LAMBDA_RESPONDER \
-          --payload "$PAYLOAD" \
+          --payload file://payload.json \
           response.json
         
         echo "Lambda response:"
