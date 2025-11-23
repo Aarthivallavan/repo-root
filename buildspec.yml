@@ -16,16 +16,10 @@ phases:
       - env | sort
       - echo "=============================="
       - echo "Checking required variables..."
-      - |
-        REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
-        for VAR in "${REQUIRED_VARS[@]}"; do
-          if [ -z "${!VAR}" ]; then
-            echo "❌ ERROR: Missing environment variable: $VAR"
-            exit 1
-          else
-            echo "✔ $VAR = ${!VAR}"
-          fi
-        done
+
+      - REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
+      - for VAR in "${REQUIRED_VARS[@]}"; do if [ -z "${!VAR}" ]; then echo "❌ ERROR: Missing env var: $VAR"; exit 1; else echo "✔ $VAR = ${!VAR}"; fi; done
+
       - echo "All required variables are present."
       - echo "=============================="
 
@@ -37,7 +31,7 @@ phases:
       - echo "CHANNEL_ID : $CHANNEL_ID"
       - echo "USER_ID    : $USER_ID"
       - echo "Starting your actual logic here..."
-      # Place your real build logic here
+      # your real logic here
 
   post_build:
     commands:
