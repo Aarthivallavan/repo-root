@@ -128,10 +128,17 @@ phases:
       - echo "Invoking Lambda Responder..."
       - |
         if [ "$SUCCESS" = true ]; then
-          echo '{"job_id": "'$JOB_ID'", "status": "completed", "s3_key": "diagrams/'$JOB_ID'.png"}' > payload.json
+          cat > payload.json <<EOF
+        {"job_id": "$JOB_ID", "status": "completed", "s3_key": "diagrams/$JOB_ID.png"}
+        EOF
         else
-          echo '{"job_id": "'$JOB_ID'", "status": "failed", "error": "Diagram file not found in S3"}' > payload.json
+          cat > payload.json <<EOF
+        {"job_id": "$JOB_ID", "status": "failed", "error": "Diagram file not found in S3"}
+        EOF
         fi
+        
+        echo "Payload content:"
+        cat payload.json
         
         aws lambda invoke \
           --function-name $LAMBDA_RESPONDER \
@@ -153,4 +160,3 @@ phases:
       - echo "=============================="
       - echo "BUILD COMPLETE"
       - echo "=============================="
-
