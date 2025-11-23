@@ -11,31 +11,144 @@ phases:
   pre_build:
     commands:
       - echo "=============================="
-      - echo "RECEIVED ENV VARIABLES"
+      - echo "DIAGRAM GENERATION STARTING"
       - echo "=============================="
-      - env | sort
+      - echo "Job ID $JOB_ID"
+      - echo "Prompt $PROMPT"
+      - echo "Channel $CHANNEL_ID"
+      - echo "User $USER_ID"
       - echo "=============================="
-      - echo "Checking required variables..."
+      - echo "Validating required variables..."
       - test -n "$JOB_ID" || (echo "ERROR Missing JOB_ID" && exit 1)
-      - echo "OK JOB_ID is $JOB_ID"
       - test -n "$PROMPT" || (echo "ERROR Missing PROMPT" && exit 1)
-      - echo "OK PROMPT is $PROMPT"
       - test -n "$CHANNEL_ID" || (echo "ERROR Missing CHANNEL_ID" && exit 1)
-      - echo "OK CHANNEL_ID is $CHANNEL_ID"
       - test -n "$USER_ID" || (echo "ERROR Missing USER_ID" && exit 1)
-      - echo "OK USER_ID is $USER_ID"
-      - echo "All required variables are present"
+      - echo "All variables present"
       - echo "=============================="
       
   build:
     commands:
-      - echo "Build phase starting"
-      - echo "JOB_ID is $JOB_ID"
-      - echo "PROMPT is $PROMPT"
-      - echo "CHANNEL_ID is $CHANNEL_ID"
-      - echo "USER_ID is $USER_ID"
-      - echo "Build phase complete"
+      - echo "Updating DynamoDB status to processing..."
+      - |
+        aws dynamodb update-item \
+          --table-name diagram-jobs \
+          --key "{\"job_id\": {\"S\": \"$JOB_ID\"}}" \
+          --update-expression "SET #status = :status, updated_at = :updated" \
+          --expression-attribute-names "{\"#status\": \"status\"}" \
+          --expression-attribute-values "{\":status\": {\"S\": \"processing\"}, \":updated\": {\"N\": \"$(date +%s)\"}}"
+      
+      - echo "Starting MCP Server..."
+      - |
+        MCP_TASK_ARN=$(aws ecs run-task \
+          --cluster $ECS_CLUSTER \
+          --launch-type FARGATE \
+          --task-definition mcp-server-task \
+          --network-configuration "awsvpcConfiguration={subnets=[subnet-0ccc4118f84577e26,subnet-0355b42dde3f68310],securityGroups=[sg-0cf06069862b4eb35],assignPublicIp=DISABLED}" \
+          --query 'tasks[0].taskArn' \
+          --output text)
+      - echo "MCP Task ARN $MCP_TASK_ARN"
+      - test -n "$MCP_TASK_ARN" || (echo "ERROR Failed to launch MCP server" && exit 1)
+      
+      - echo "Waiting for MCP server to start..."
+      - sleep 30
+      
+      - echo "Getting MCP server IP..."
+      - |
+        MCP_IP=$(aws ecs describe-tasks \
+          --cluster $ECS_CLUSTER \
+          --tasks $MCP_TASK_ARN \
+          --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' \
+          --output text)
+      - echo "MCP Server IP $MCP_IP"
+      - test -n "$MCP_IP" || (echo "ERROR Failed to get MCP IP" && exit 1)
+      
+      - echo "Starting Worker..."
+      - |
+        WORKER_TASK_ARN=$(aws ecs run-task \
+          --cluster $ECS_CLUSTER \
+          --launch-type FARGATE \
+          --task-definition worker-task \
+          --network-configuration "awsvpcConfiguration={subnets=[subnet-0ccc4118f84577e26,subnet-0355b42dde3f68310],securityGroups=[sg-0cf06069862b4eb35],assignPublicIp=DISABLED}" \
+          --overrides "{
+            \"containerOverrides\": [{
+              \"name\": \"worker\",
+              \"environment\": [
+                {\"name\": \"JOB_ID\", \"value\": \"$JOB_ID\"},
+                {\"name\": \"PROMPT\", \"value\": \"$PROMPT\"},
+                {\"name\": \"OUTPUT_BUCKET\", \"value\": \"$S3_BUCKET\"},
+                {\"name\": \"OUTPUT_KEY_PREFIX\", \"value\": \"diagrams/\"},
+                {\"name\": \"MCP_SERVICE_URL\", \"value\": \"http://$MCP_IP:5000/render\"},
+                {\"name\": \"AWS_REGION\", \"value\": \"$AWS_DEFAULT_REGION\"},
+                {\"name\": \"MODE\", \"value\": \"single\"}
+              ]
+            }]
+          }" \
+          --query 'tasks[0].taskArn' \
+          --output text)
+      - echo "Worker Task ARN $WORKER_TASK_ARN"
+      - test -n "$WORKER_TASK_ARN" || (echo "ERROR Failed to launch worker" && exit 1)
+      
+      - echo "Waiting for worker to complete..."
+      - |
+        for i in {1..20}; do
+          WORKER_STATUS=$(aws ecs describe-tasks \
+            --cluster $ECS_CLUSTER \
+            --tasks $WORKER_TASK_ARN \
+            --query 'tasks[0].lastStatus' \
+            --output text 2>/dev/null || echo "UNKNOWN")
+          
+          echo "Worker status $WORKER_STATUS (check $i/20)"
+          
+          if [ "$WORKER_STATUS" = "STOPPED" ]; then
+            echo "Worker completed"
+            break
+          fi
+          
+          if [ "$i" -eq 20 ]; then
+            echo "WARNING Worker still running after 5 minutes"
+          fi
+          
+          sleep 15
+        done
       
   post_build:
     commands:
-      - echo "Post-build complete"
+      - echo "Checking if diagram was created..."
+      - |
+        if aws s3 ls "s3://$S3_BUCKET/diagrams/$JOB_ID.png" > /dev/null 2>&1; then
+          echo "SUCCESS Diagram found in S3"
+          SUCCESS=true
+        else
+          echo "FAILURE Diagram not found in S3"
+          SUCCESS=false
+        fi
+      
+      - echo "Invoking Lambda Responder..."
+      - |
+        if [ "$SUCCESS" = true ]; then
+          PAYLOAD=$(echo -n "{\"job_id\": \"$JOB_ID\", \"status\": \"completed\", \"s3_key\": \"diagrams/$JOB_ID.png\"}" | base64)
+        else
+          PAYLOAD=$(echo -n "{\"job_id\": \"$JOB_ID\", \"status\": \"failed\", \"error\": \"Diagram file not found in S3\"}" | base64)
+        fi
+        
+        aws lambda invoke \
+          --function-name $LAMBDA_RESPONDER \
+          --payload "$PAYLOAD" \
+          --cli-binary-format raw-in-base64-out \
+          response.json
+        
+        echo "Lambda response:"
+        cat response.json
+      
+      - echo "Cleaning up ECS tasks..."
+      - |
+        if [ ! -z "$MCP_TASK_ARN" ]; then
+          aws ecs stop-task --cluster $ECS_CLUSTER --task $MCP_TASK_ARN > /dev/null 2>&1 || echo "Failed to stop MCP task"
+        fi
+        if [ ! -z "$WORKER_TASK_ARN" ]; then
+          aws ecs stop-task --cluster $ECS_CLUSTER --task $WORKER_TASK_ARN > /dev/null 2>&1 || echo "Failed to stop Worker task"
+        fi
+      
+      - echo "=============================="
+      - echo "BUILD COMPLETE"
+      - echo "============================"
