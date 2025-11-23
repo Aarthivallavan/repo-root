@@ -3,7 +3,7 @@ version: 0.2
 env:
   variables:
     AWS_DEFAULT_REGION: "us-east-2"
-    ECS_CLUSTER: "diagram-cluster"
+    ECS_CLUSTER: "diagram-cluster-407668821695"
     S3_BUCKET: "diagram-output-407668821695-1"
     LAMBDA_RESPONDER: "slack-diagram-responder"
 
@@ -126,15 +126,14 @@ phases:
       - echo "Invoking Lambda Responder..."
       - |
         if [ "$SUCCESS" = true ]; then
-          PAYLOAD=$(echo -n "{\"job_id\": \"$JOB_ID\", \"status\": \"completed\", \"s3_key\": \"diagrams/$JOB_ID.png\"}" | base64)
+          PAYLOAD='{"job_id": "'$JOB_ID'", "status": "completed", "s3_key": "diagrams/'$JOB_ID'.png"}'
         else
-          PAYLOAD=$(echo -n "{\"job_id\": \"$JOB_ID\", \"status\": \"failed\", \"error\": \"Diagram file not found in S3\"}" | base64)
+          PAYLOAD='{"job_id": "'$JOB_ID'", "status": "failed", "error": "Diagram file not found in S3"}'
         fi
         
         aws lambda invoke \
           --function-name $LAMBDA_RESPONDER \
           --payload "$PAYLOAD" \
-          --cli-binary-format raw-in-base64-out \
           response.json
         
         echo "Lambda response:"
@@ -151,4 +150,4 @@ phases:
       
       - echo "=============================="
       - echo "BUILD COMPLETE"
-      - echo "============================"
+      - echo "=============================="
