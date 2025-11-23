@@ -16,10 +16,9 @@ phases:
       - env | sort
       - echo "=============================="
       - echo "Checking required variables..."
-
-      # Corrected array syntax
-      - 'REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")'
+      # Use multi-line string block with pipe | to avoid YAML parsing issues
       - |
+        REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
         for VAR in "${REQUIRED_VARS[@]}"; do
           if [ -z "${!VAR}" ]; then
             echo "❌ ERROR: Missing env var: $VAR"
@@ -28,10 +27,9 @@ phases:
             echo "✔ $VAR = ${!VAR}"
           fi
         done
-
       - echo "All required variables are present."
       - echo "=============================="
-
+      
   build:
     commands:
       - echo "Build phase starting..."
@@ -40,8 +38,8 @@ phases:
       - echo "CHANNEL_ID : $CHANNEL_ID"
       - echo "USER_ID    : $USER_ID"
       - echo "Starting your actual logic here..."
-      # your real logic here
-
+      # Your real logic here
+      
   post_build:
     commands:
       - echo "Post-build complete"
