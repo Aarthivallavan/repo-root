@@ -17,8 +17,17 @@ phases:
       - echo "=============================="
       - echo "Checking required variables..."
 
-      - REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
-      - for VAR in "${REQUIRED_VARS[@]}"; do if [ -z "${!VAR}" ]; then echo "❌ ERROR: Missing env var: $VAR"; exit 1; else echo "✔ $VAR = ${!VAR}"; fi; done
+      # Corrected array syntax
+      - 'REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")'
+      - |
+        for VAR in "${REQUIRED_VARS[@]}"; do
+          if [ -z "${!VAR}" ]; then
+            echo "❌ ERROR: Missing env var: $VAR"
+            exit 1
+          else
+            echo "✔ $VAR = ${!VAR}"
+          fi
+        done
 
       - echo "All required variables are present."
       - echo "=============================="
