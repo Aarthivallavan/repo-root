@@ -50,7 +50,7 @@ phases:
       - test -n "$MCP_TASK_ARN" || (echo "ERROR Failed to launch MCP server" && exit 1)
       
       - echo "Waiting for MCP server to start..."
-      - sleep 30
+      - sleep 60
       
       - echo "Getting MCP server IP..."
       - |
@@ -153,3 +153,4 @@ phases:
       - echo "=============================="
       - echo "BUILD COMPLETE"
       - echo "=============================="
+
