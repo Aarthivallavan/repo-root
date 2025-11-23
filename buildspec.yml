@@ -17,14 +17,12 @@ phases:
   build:
     commands:
       - |
-        # Validate input
         if [ -z "$JOB_ID" ] || [ -z "$PROMPT" ]; then
           echo "ERROR: JOB_ID or PROMPT is empty!"
           exit 1
         fi
 
       - |
-        # Update DynamoDB status
         aws dynamodb update-item \
           --table-name diagram-jobs \
           --key "{\"job_id\": {\"S\": \"$JOB_ID\"}}" \
@@ -35,7 +33,6 @@ phases:
       - echo "Starting MCP Server..."
 
       - |
-        # Run MCP Server task
         MCP_TASK_ARN=$(aws ecs run-task \
           --cluster $ECS_CLUSTER \
           --launch-type FARGATE \
@@ -48,7 +45,6 @@ phases:
       - sleep 30
 
       - |
-        # Get MCP IP
         MCP_IP=$(aws ecs describe-tasks \
           --cluster $ECS_CLUSTER \
           --tasks $MCP_TASK_ARN \
@@ -66,8 +62,7 @@ phases:
       - echo "Starting Worker..."
 
       - |
-        # Run worker task
-        WORKER_TASK_ARN=$(aws ecs run-task \
+        WORKER_TASK_ARN=$(aws ecs.run-task \
           --cluster $ECS_CLUSTER \
           --launch-type FARGATE \
           --task-definition worker-task \
@@ -93,7 +88,6 @@ phases:
       - sleep 60
 
       - |
-        # Poll worker task
         for i in {1..10}; do
           STATUS=$(aws ecs describe-tasks \
             --cluster $ECS_CLUSTER \
@@ -110,7 +104,6 @@ phases:
   post_build:
     commands:
       - |
-        # Verify S3 output
         if aws s3 ls s3://$S3_BUCKET/diagrams/$JOB_ID.png; then
           echo "Diagram OK"
         else
