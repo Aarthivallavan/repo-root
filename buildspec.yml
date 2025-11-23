@@ -10,102 +10,35 @@ env:
 phases:
   pre_build:
     commands:
-      - echo "Starting diagram generation for job $JOB_ID"
-      - echo "Prompt: $PROMPT"
-      - echo "Channel: $CHANNEL_ID"
+      - echo "=============================="
+      - echo "   RECEIVED ENV VARIABLES"
+      - echo "=============================="
+      - env | sort
+      - echo "=============================="
+      - echo "Checking required variables..."
+      - |
+        REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
+        for VAR in "${REQUIRED_VARS[@]}"; do
+          if [ -z "${!VAR}" ]; then
+            echo "❌ ERROR: Missing environment variable: $VAR"
+            exit 1
+          else
+            echo "✔ $VAR = ${!VAR}"
+          fi
+        done
+      - echo "All required variables are present."
+      - echo "=============================="
 
   build:
     commands:
-      - |
-        if [ -z "$JOB_ID" ] || [ -z "$PROMPT" ]; then
-          echo "ERROR: JOB_ID or PROMPT is empty!"
-          exit 1
-        fi
-
-      - |
-        aws dynamodb update-item \
-          --table-name diagram-jobs \
-          --key "{\"job_id\": {\"S\": \"$JOB_ID\"}}" \
-          --update-expression "SET #status = :status, updated_at = :updated" \
-          --expression-attribute-names "{\"#status\": \"status\"}" \
-          --expression-attribute-values "{\":status\": {\"S\": \"processing\"}, \":updated\": {\"N\": \"$(date +%s)\"}}"
-
-      - echo "Starting MCP Server..."
-
-      - |
-        MCP_TASK_ARN=$(aws ecs run-task \
-          --cluster $ECS_CLUSTER \
-          --launch-type FARGATE \
-          --task-definition mcp-server-task \
-          --network-configuration "awsvpcConfiguration={subnets=[subnet-0ccc4118f84577e26,subnet-0355b42dde3f68310],securityGroups=[sg-0cf06069862b4eb35],assignPublicIp=DISABLED}" \
-          --query 'tasks[0].taskArn' \
-          --output text)
-
-      - echo "MCP Task ARN: $MCP_TASK_ARN"
-      - sleep 30
-
-      - |
-        MCP_IP=$(aws ecs describe-tasks \
-          --cluster $ECS_CLUSTER \
-          --tasks $MCP_TASK_ARN \
-          --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' \
-          --output text)
-
-      - echo "MCP Server IP: $MCP_IP"
-
-      - |
-        if [ -z "$MCP_IP" ]; then
-          echo "ERROR: Failed to get MCP server IP"
-          exit 1
-        fi
-
-      - echo "Starting Worker..."
-
-      - |
-        WORKER_TASK_ARN=$(aws ecs.run-task \
-          --cluster $ECS_CLUSTER \
-          --launch-type FARGATE \
-          --task-definition worker-task \
-          --network-configuration "awsvpcConfiguration={subnets=[subnet-0ccc4118f84577e26,subnet-0355b42dde3f68310],securityGroups=[sg-0cf06069862b4eb35],assignPublicIp=DISABLED}" \
-          --overrides "{
-            \"containerOverrides\": [{
-              \"name\": \"worker\",
-              \"environment\": [
-                {\"name\": \"JOB_ID\", \"value\": \"$JOB_ID\"},
-                {\"name\": \"PROMPT\", \"value\": \"$PROMPT\"},
-                {\"name\": \"OUTPUT_BUCKET\", \"value\": \"$S3_BUCKET\"},
-                {\"name\": \"OUTPUT_KEY_PREFIX\", \"value\": \"diagrams/\"},
-                {\"name\": \"MCP_SERVICE_URL\", \"value\": \"http://$MCP_IP:5000/render\"},
-                {\"name\": \"AWS_REGION\", \"value\": \"$AWS_DEFAULT_REGION\"},
-                {\"name\": \"MODE\", \"value\": \"single\"}
-              ]
-            }]
-          }" \
-          --query 'tasks[0].taskArn' \
-          --output text)
-
-      - echo "Worker Task ARN: $WORKER_TASK_ARN"
-      - sleep 60
-
-      - |
-        for i in {1..10}; do
-          STATUS=$(aws ecs describe-tasks \
-            --cluster $ECS_CLUSTER \
-            --tasks $WORKER_TASK_ARN \
-            --query 'tasks[0].lastStatus' \
-            --output text)
-          echo "Worker status: $STATUS ($i/10)"
-          if [ "$STATUS" = "STOPPED" ]; then
-            break
-          fi
-          sleep 30
-        done
+      - echo "Build phase starting..."
+      - echo "JOB_ID     : $JOB_ID"
+      - echo "PROMPT     : $PROMPT"
+      - echo "CHANNEL_ID : $CHANNEL_ID"
+      - echo "USER_ID    : $USER_ID"
+      - echo "Starting your actual logic here..."
+      # Place your real build logic here
 
   post_build:
     commands:
-      - |
-        if aws s3 ls s3://$S3_BUCKET/diagrams/$JOB_ID.png; then
-          echo "Diagram OK"
-        else
-          echo "Diagram missing"
-        fi
+      - echo "Post-build complete"
