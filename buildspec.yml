@@ -142,6 +142,7 @@ phases:
         
         aws lambda invoke \
           --function-name $LAMBDA_RESPONDER \
+          --cli-binary-format raw-in-base64-out \
           --payload file://payload.json \
           response.json
         
