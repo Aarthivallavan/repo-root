@@ -11,34 +11,36 @@ phases:
   pre_build:
     commands:
       - echo "=============================="
-      - echo "   RECEIVED ENV VARIABLES"
+      - echo "RECEIVED ENV VARIABLES"
       - echo "=============================="
       - env | sort
       - echo "=============================="
       - echo "Checking required variables..."
-      # Use multi-line string block with pipe | to avoid YAML parsing issues
       - |
         REQUIRED_VARS=("JOB_ID" "PROMPT" "CHANNEL_ID" "USER_ID")
+        ALL_PRESENT=true
         for VAR in "${REQUIRED_VARS[@]}"; do
           if [ -z "${!VAR}" ]; then
-            echo "❌ ERROR: Missing env var: $VAR"
-            exit 1
+            echo "ERROR Missing env var $VAR"
+            ALL_PRESENT=false
           else
-            echo "✔ $VAR = ${!VAR}"
+            echo "OK $VAR is ${!VAR}"
           fi
         done
-      - echo "All required variables are present."
+        if [ "$ALL_PRESENT" = false ]; then
+          exit 1
+        fi
+        echo "All required variables are present"
       - echo "=============================="
       
   build:
     commands:
-      - echo "Build phase starting..."
-      - echo "JOB_ID     : $JOB_ID"
-      - echo "PROMPT     : $PROMPT"
-      - echo "CHANNEL_ID : $CHANNEL_ID"
-      - echo "USER_ID    : $USER_ID"
-      - echo "Starting your actual logic here..."
-      # Your real logic here
+      - echo "Build phase starting"
+      - echo "JOB_ID is $JOB_ID"
+      - echo "PROMPT is $PROMPT"
+      - echo "CHANNEL_ID is $CHANNEL_ID"
+      - echo "USER_ID is $USER_ID"
+      - echo "Build phase complete"
       
   post_build:
     commands:
